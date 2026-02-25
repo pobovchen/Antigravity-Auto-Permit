@@ -1,4 +1,4 @@
 @echo off
 echo Starting Antigravity Auto-Clicker...
-python main.py
+py main.py
 pause
