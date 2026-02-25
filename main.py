@@ -16,17 +16,19 @@ from PIL import ImageGrab
 class AntigravityClicker:
     def __init__(self, root):
         self.root = root
-        self.root.title("Antigravity Butler V3.4 - Smart Trigger Memory")
-        self.root.geometry("850x800")
+        self.root.title("Antigravity Butler V3.5 - Maximum Safety")
+        self.root.geometry("850x820")
         self.root.configure(bg="#1e1e2e")
         
         self.is_running = False
         self.click_history = []
         self.template_cache = {} 
         
-        # Trigger Memory Logic
-        self.handled_triggers = set() # Set of filenames currently "in cooldown"
-        self.trigger_last_seen = {}   # {filename: timestamp}
+        # Security Metrics
+        self.handled_triggers = set()
+        self.trigger_last_seen = {}
+        self.session_start_time = 0
+        self.total_click_count = 0
         
         # Multiple Template Support
         self.templates_dir = "templates"
@@ -49,16 +51,24 @@ class AntigravityClicker:
         style.configure("TLabel", background="#1e1e2e", foreground="#cdd6f4", font=("Segoe UI", 10))
         style.configure("Header.TLabel", font=("Segoe UI", 16, "bold"), foreground="#f5c2e7")
         style.configure("Status.TLabel", font=("Segoe UI", 12), foreground="#fab387")
-        style.configure("Bold.TLabel", font=("Segoe UI", 10, "bold"), foreground="#cdd6f4")
+        style.configure("Info.TLabel", foreground="#89b4fa", font=("Segoe UI", 9))
         
         main_frame = ttk.Frame(self.root, padding="20")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        header = ttk.Label(main_frame, text="Antigravity Butler V3.4 - 智慧記憶系統", style="Header.TLabel")
+        header = ttk.Label(main_frame, text="Antigravity Butler V3.5 - 熔斷與安全監控", style="Header.TLabel")
         header.pack(pady=(0, 5))
         
         self.status_label = ttk.Label(main_frame, text="Status: IDLE", style="Status.TLabel")
         self.status_label.pack(pady=(0, 5))
+
+        # Security Info Labels
+        info_frame = ttk.Frame(main_frame)
+        info_frame.pack(fill=tk.X, pady=2)
+        self.timer_label = ttk.Label(info_frame, text="運行時間: 00:00 / 30:00", style="Info.TLabel")
+        self.timer_label.pack(side=tk.LEFT, padx=10)
+        self.counter_label = ttk.Label(info_frame, text="總點擊數: 0 / 100", style="Info.TLabel")
+        self.counter_label.pack(side=tk.RIGHT, padx=10)
 
         ctrl_panel = ttk.Frame(main_frame)
         ctrl_panel.pack(fill=tk.X, pady=10)
@@ -84,15 +94,15 @@ class AntigravityClicker:
                        font=("Segoe UI", 10)).grid(row=0, column=0, sticky=tk.W)
 
         self.protocol_mode = tk.BooleanVar(value=True)
-        tk.Checkbutton(settings_frame, text="啟用序列判定 (已執行則冷卻 5 分鐘)", variable=self.protocol_mode,
+        tk.Checkbutton(settings_frame, text="啟用序列判定 (智慧記憶機制)", variable=self.protocol_mode,
                        bg="#1e1e2e", fg="#89b4fa", selectcolor="#313244", activebackground="#1e1e2e",
                        font=("Segoe UI", 10)).grid(row=1, column=0, sticky=tk.W)
 
-        ttk.Label(settings_frame, text="掃瞄間隔 (秒):", style="Bold.TLabel").grid(row=2, column=0, sticky=tk.W)
-        self.interval_var = tk.StringVar(value="0.5")
+        ttk.Label(settings_frame, text="掃瞄間隔 (秒):", font=("Segoe UI", 10, "bold")).grid(row=2, column=0, sticky=tk.W)
+        self.interval_var = tk.StringVar(value="2") # Changed from 0.5 to 2 as per user edit
         ttk.Entry(settings_frame, textvariable=self.interval_var, width=10).grid(row=2, column=1, sticky=tk.W)
 
-        ttk.Label(settings_frame, text="辨識信心度:", style="Bold.TLabel").grid(row=3, column=0, sticky=tk.W)
+        ttk.Label(settings_frame, text="辨識信心度:", font=("Segoe UI", 10, "bold")).grid(row=3, column=0, sticky=tk.W)
         self.confidence_var = tk.StringVar(value="0.8")
         ttk.Entry(settings_frame, textvariable=self.confidence_var, width=10).grid(row=3, column=1, sticky=tk.W)
 
@@ -166,12 +176,31 @@ class AntigravityClicker:
 
     def toggle_service(self):
         if not self.is_running:
-            self.is_running = True; self.btn_toggle.configure(text="🛑 停止運行", bg="#f38ba8")
+            self.total_click_count = 0
+            self.session_start_time = time.time()
+            self.is_running = True
+            self.btn_toggle.configure(text="🛑 停止運行", bg="#f38ba8")
             self.status_label.configure(text="Status: ACTIVE", foreground="#a6e3a1")
+            self.update_security_display()
             threading.Thread(target=self.click_loop, daemon=True).start()
         else:
-            self.is_running = False; self.btn_toggle.configure(text="🚀 啟動系統", bg="#a6e3a1")
+            self.is_running = False
+            self.btn_toggle.configure(text="🚀 啟動系統", bg="#a6e3a1")
             self.status_label.configure(text="Status: IDLE", foreground="#fab387")
+
+    def update_security_display(self):
+        if not self.is_running: return
+        elapsed = time.time() - self.session_start_time
+        mins = int(elapsed // 60)
+        secs = int(elapsed % 60)
+        self.timer_label.configure(text=f"運行時間: {mins:02d}:{secs:02d} / 30:00")
+        self.counter_label.configure(text=f"總點擊數: {self.total_click_count} / 100")
+        
+        # Color warning
+        if mins >= 25: self.timer_label.configure(foreground="#f38ba8")
+        if self.total_click_count >= 80: self.counter_label.configure(foreground="#f38ba8")
+        
+        self.root.after(1000, self.update_security_display)
 
     def find_matches_in_cache(self, screen_gray, prefix, threshold, ox, oy):
         matches = []
@@ -188,7 +217,9 @@ class AntigravityClicker:
         tx, ty = x + random.randint(-2, 2), y + random.randint(-2, 2)
         pyautogui.moveTo(tx, ty, duration=random.uniform(0.2, 0.4), tween=pyautogui.easeInOutQuad)
         pyautogui.mouseDown(); time.sleep(random.uniform(0.05, 0.12)); pyautogui.mouseUp()
-        self.click_history.append(time.time()); self.log(f"點擊 @ ({tx}, {ty})")
+        self.click_history.append(time.time())
+        self.total_click_count += 1
+        self.log(f"點擊 @ ({tx}, {ty}) [總計: {self.total_click_count}]")
 
     def highlight(self, m):
         h = tk.Toplevel()
@@ -200,6 +231,21 @@ class AntigravityClicker:
         while self.is_running:
             try:
                 now = time.time()
+                # 1. Session Timeout Check (30 mins)
+                elapsed = now - self.session_start_time
+                if elapsed > 1800:
+                    self.log("🕒 熔斷預警：執行已滿 30 分鐘，系統自動斷電保護。")
+                    self.root.after(0, self.toggle_service)
+                    messagebox.showinfo("安全提示", "自動化工作已滿 30 分鐘，為了帳號安全已自動停止。")
+                    return
+
+                # 2. Total Click Limit (100 clicks)
+                if self.total_click_count >= 100:
+                    self.log("🛑 熔斷預警：總點擊量已達 100 次，系統自動停止。")
+                    self.root.after(0, self.toggle_service)
+                    messagebox.showwarning("熔斷警報", "總點擊量已達 100 次安全限制，請人工檢查。")
+                    return
+
                 conf = float(self.confidence_var.get())
                 bbox = self.roi if self.roi else None
                 screen = np.array(ImageGrab.grab(bbox=bbox))
@@ -210,34 +256,29 @@ class AntigravityClicker:
                 for handled_name in list(self.handled_triggers):
                     if now - self.trigger_last_seen.get(handled_name, 0) > 300:
                         self.handled_triggers.remove(handled_name)
-                        self.log(f"記憶重置：{handled_name} 已消失超過 5 分鐘，下次偵測將重新執行。")
+                        self.log(f"記憶重置：{handled_name} 已清空記憶位。")
 
-                # 1. Messenger Protocol
+                # 3. Messenger Protocol
                 if self.protocol_mode.get():
                     triggers = self.find_matches_in_cache(screen_gray, "trigger_", conf, ox, oy)
                     for t in triggers:
                         self.trigger_last_seen[t['name']] = now
+                        if t['name'] in self.handled_triggers: continue
                         
-                        if t['name'] in self.handled_triggers:
-                            continue # Skip if already handled and not reset
-                        
-                        self.log(f"🔥 觸發判定: {t['name']} (首次偵測)")
-                        
+                        self.log(f"🔥 觸發判定: {t['name']}")
                         fb_found = False
                         for _ in range(3):
                             s_fb = np.array(ImageGrab.grab(bbox=bbox))
                             g_fb = cv2.cvtColor(s_fb, cv2.COLOR_RGB2GRAY)
-                            
                             likes = self.find_matches_in_cache(g_fb, "like_", conf, ox, oy)
                             if likes:
-                                l = likes[0]; self.log(f"👍 執行按讚 {l['name']}")
+                                l = likes[0]; self.log(f"👍 執行行為回應 {l['name']}")
                                 if self.preview_mode.get(): self.highlight(l)
                                 else: self.human_click(l['x'], l['y'])
                                 fb_found = True; break
-                            
                             inputs = self.find_matches_in_cache(g_fb, "input_", conf, ox, oy)
                             if inputs:
-                                i = inputs[0]; self.log(f"✍️ 執行輸入 {i['name']}")
+                                i = inputs[0]; self.log(f"✍️ 執行文字回應 {i['name']}")
                                 if self.preview_mode.get(): self.highlight(i)
                                 else: 
                                     self.human_click(i['x'], i['y'])
@@ -247,20 +288,17 @@ class AntigravityClicker:
                         
                         if fb_found:
                             self.handled_triggers.add(t['name'])
-                            self.log(f"✅ {t['name']} 動作已完成，進入記憶保護狀態 (直到消失5分鐘)。")
-                        else:
-                            self.log(f"⚠️ 偵測到 {t['name']} 但找不到按讚/輸入框，將於下次掃描重試。")
-                        
-                        time.sleep(1.0); break # Process one trigger at a time
+                        time.sleep(1.0); break 
 
-                # 2. General Target Click
+                # 4. General Target Click
                 targets = self.find_matches_in_cache(screen_gray, "target_", conf, ox, oy)
                 if targets:
                     t = targets[0]
                     if self.preview_mode.get(): self.highlight(t)
                     else:
+                        # Short-term burst check
                         self.click_history = [th for th in self.click_history if now - th < 300]
-                        if len(self.click_history) >= 15: self.log("⚠️ 頻率過載"); self.root.after(0, self.toggle_service); return
+                        if len(self.click_history) >= 15: self.log("⚠️ 密度過載"); self.root.after(0, self.toggle_service); return
                         self.human_click(t['x'], t['y'])
                     time.sleep(1.0)
                     
