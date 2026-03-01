@@ -4,6 +4,14 @@ from tkinter import ttk, scrolledtext, messagebox
 import threading
 import time
 import os
+import ctypes
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 import pyautogui
 import keyboard
 import cv2
@@ -131,13 +139,18 @@ class AntigravityClicker:
     def select_roi(self):
         self.root.withdraw(); time.sleep(0.5)
         selection_win = tk.Toplevel()
-        selection_win.attributes("-alpha", 0.3, "-fullscreen", True, "-topmost", True)
+        user32 = ctypes.windll.user32
+        vx, vy = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
+        vw, vh = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
+        selection_win.geometry(f"{vw}x{vh}+{vx}+{vy}")
+        selection_win.overrideredirect(True)
+        selection_win.attributes("-alpha", 0.3, "-topmost", True)
         canvas = tk.Canvas(selection_win, cursor="cross", bg="grey"); canvas.pack(fill="both", expand=True)
         sx, sy, rid = None, None, None
         def on_down(e): nonlocal sx, sy, rid; sx, sy = e.x, e.y; rid = canvas.create_rectangle(sx, sy, sx, sy, outline="yellow", width=3)
         def on_up(e):
             ex, ey = e.x, e.y; selection_win.destroy()
-            self.roi = (min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey))
+            self.roi = (min(sx, ex) + vx, min(sy, ey) + vy, max(sx, ex) + vx, max(sy, ey) + vy)
             self.log(f"區域設定: {self.roi}"); self.root.deiconify()
         canvas.bind("<ButtonPress-1>", on_down); canvas.bind("<B1-Motion>", lambda e: canvas.coords(rid, sx, sy, e.x, e.y)); canvas.bind("<ButtonRelease-1>", on_up)
 
@@ -151,13 +164,19 @@ class AntigravityClicker:
             fname = f"{prefix_var.get()}{entry.get()}.png"
             name_win.destroy(); self.root.withdraw(); time.sleep(0.5)
             selection_win = tk.Toplevel()
-            selection_win.attributes("-alpha", 0.3, "-fullscreen", True, "-topmost", True)
+            user32 = ctypes.windll.user32
+            vx, vy = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
+            vw, vh = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
+            selection_win.geometry(f"{vw}x{vh}+{vx}+{vy}")
+            selection_win.overrideredirect(True)
+            selection_win.attributes("-alpha", 0.3, "-topmost", True)
             canvas = tk.Canvas(selection_win, cursor="cross", bg="grey"); canvas.pack(fill="both", expand=True)
             sx, sy, rid = None, None, None
             def d_cap(e): nonlocal sx, sy, rid; sx, sy = e.x, e.y; rid = canvas.create_rectangle(sx, sy, sx, sy, outline="red", width=2)
             def u_cap(e):
                 ex, ey = e.x, e.y; selection_win.destroy()
-                img = ImageGrab.grab(bbox=(min(sx, ex), min(sy, ey), max(sx, ex), max(sy, ey)))
+                abs_box = (min(sx, ex) + vx, min(sy, ey) + vy, max(sx, ex) + vx, max(sy, ey) + vy)
+                img = ImageGrab.grab(bbox=abs_box, all_screens=True)
                 img.save(os.path.join(self.templates_dir, fname))
                 self.log(f"捕捉完成: {fname}"); self.load_templates(); self.root.deiconify()
             canvas.bind("<ButtonPress-1>", d_cap); canvas.bind("<B1-Motion>", lambda e: canvas.coords(rid, sx, sy, e.x, e.y)); canvas.bind("<ButtonRelease-1>", u_cap)
@@ -248,9 +267,15 @@ class AntigravityClicker:
 
                 conf = float(self.confidence_var.get())
                 bbox = self.roi if self.roi else None
-                screen = np.array(ImageGrab.grab(bbox=bbox))
+                if bbox is None:
+                    user32 = ctypes.windll.user32
+                    vx, vy = user32.GetSystemMetrics(76), user32.GetSystemMetrics(77)
+                    vw, vh = user32.GetSystemMetrics(78), user32.GetSystemMetrics(79)
+                    bbox = (vx, vy, vx + vw, vy + vh)
+                
+                screen = np.array(ImageGrab.grab(bbox=bbox, all_screens=True))
                 screen_gray = cv2.cvtColor(screen, cv2.COLOR_RGB2GRAY)
-                ox, oy = (self.roi[0], self.roi[1]) if self.roi else (0, 0)
+                ox, oy = bbox[0], bbox[1]
 
                 # Protocol Logic: Update unseen triggers for cooldown reset
                 for handled_name in list(self.handled_triggers):
@@ -268,7 +293,7 @@ class AntigravityClicker:
                         self.log(f"🔥 觸發判定: {t['name']}")
                         fb_found = False
                         for _ in range(3):
-                            s_fb = np.array(ImageGrab.grab(bbox=bbox))
+                            s_fb = np.array(ImageGrab.grab(bbox=bbox, all_screens=True))
                             g_fb = cv2.cvtColor(s_fb, cv2.COLOR_RGB2GRAY)
                             likes = self.find_matches_in_cache(g_fb, "like_", conf, ox, oy)
                             if likes:

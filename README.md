@@ -1,4 +1,10 @@
-# 🛠️ Antigravity Butler V3.5 - 智慧視覺自動化管家
+# 🛡️ Antigravity-Auto-Permit (Butler V3.5)
+
+![Antigravity Butler Demo](./firstview.jpg)
+
+## 🎯 解決痛點：不再被 「Run」 與 「Allow」 中斷
+這是一個專為解決 **Antigravity** 在操作過程中頻繁跳出授權按鈕而設計的視覺自動化工具。它能「看見」螢幕上的特定圖案，並以擬人路徑自動執行點擊，讓您專注於程式開發。
+
 
 這是一個專為 Windows 環境設計的**全視覺驅動 (Vision-Driven)** 自動化工具。它能「看見」螢幕上的特定圖案，並以「模擬真人」的方式執行點擊、授權或訊息回饋任務。
 
